@@ -1,6 +1,8 @@
 const $=id=>document.getElementById(id);
 const room=new URLSearchParams(location.search).get("room");
-const storageKey=`amu-summon-room-${room||"1"}`;const dataVersion="2026-09-14-user-registration-v1";if(localStorage.getItem("amu-summon-data-version")!==dataVersion){for(let index=1;index<=10;index++)localStorage.removeItem(`amu-summon-room-${index}`);localStorage.setItem("amu-summon-data-version",dataVersion);}
+const storageKey=`amu-summon-room-${room||"1"}`;
+const dataVersion="2026-09-14-user-registration-v1";
+if(localStorage.getItem("amu-summon-data-version")!==dataVersion){for(let index=1;index<=10;index++)localStorage.removeItem(`amu-summon-room-${index}`);localStorage.setItem("amu-summon-data-version",dataVersion);}
 const cap=10;
 const summonImageNumbers=Array.from({length:65},(_,index)=>index+1);
 let state={monsters:[],activeId:null,userName:""};
@@ -46,6 +48,8 @@ function startRecognition(){if(!micReady||!touchData||recognition)return;const S
 function beginTouch(event){activePointerId=event.pointerId;$("summonStage").setPointerCapture?.(event.pointerId);$("summonStage").classList.add("charging");updateTouch(event);startRecognition();}
 function endTouch(event){if(activePointerId!==event.pointerId)return;activePointerId=null;$("summonStage").classList.remove("charging");stopRecognition();if(micReady)$("sensorText").textContent="五芒星に指を置くと音声認識が始まります。";}
 setupRooms();load();
+$('userNameInput').addEventListener('input',event=>$('registerUser').disabled=!event.target.value.trim());
+$('registerUser').addEventListener('click',()=>{state.userName=$('userNameInput').value.trim();save();renderMain();});
 $("openSummon").addEventListener("click",openSummon);
 $("openWarehouse").addEventListener("click",renderWarehouse);
 $("cancelSummon").addEventListener("click",()=>{clearSummon();renderMain();});
@@ -56,4 +60,4 @@ $("summonStage").addEventListener("pointercancel",endTouch);
 $("summonStage").addEventListener("contextmenu",event=>event.preventDefault());
 $("summonStage").addEventListener("touchstart",event=>event.preventDefault(),{passive:false});
 document.querySelectorAll("[data-back-main]").forEach(button=>button.addEventListener("click",renderMain));
-if(room)renderMain();else show("admin");
+if(room){if(state.userName)renderMain();else show("register");}else show("admin");
