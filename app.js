@@ -53,6 +53,7 @@ function startRecognition(){if(!micReady||!touchData||recognition)return;const S
 function beginTouch(event){activePointerId=event.pointerId;$("summonStage").setPointerCapture?.(event.pointerId);$("summonStage").classList.add("charging");updateTouch(event);startRecognition();}
 function endTouch(event){if(activePointerId!==event.pointerId)return;activePointerId=null;$("summonStage").classList.remove("charging");stopRecognition();if(micReady)$("sensorText").textContent="五芒星に指を置くと音声認識が始まります。";}
 setupRooms();load();
+$('openSummon').addEventListener('click',()=>{$('locationMap').src='https://www.openstreetmap.org/export/embed.html?bbox=139.68%2C35.64%2C139.78%2C35.72&layer=mapnik';});
 $('chooseLocation').addEventListener('click',()=>{$('spellStep').scrollIntoView({behavior:'smooth'});$('spellButton').disabled=!micReady;if(micReady)$('spellText').textContent='ボタンを押している間だけ「召喚」を認識します。';});
 $('spellButton').addEventListener('pointerdown',event=>{event.preventDefault();activePointerId=-1;startRecognition();});
 $('spellButton').addEventListener('pointerup',()=>{stopRecognition();stopWave();activePointerId=null;});
