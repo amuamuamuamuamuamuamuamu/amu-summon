@@ -2,6 +2,7 @@ const $=id=>document.getElementById(id);
 const room=new URLSearchParams(location.search).get("room");
 const storageKey=`amu-summon-room-${room||"1"}`;
 const cap=10;
+const summonImageNumbers=Array.from({length:65},(_,index)=>index+1);
 let state={monsters:[],activeId:null};
 let touchData=null;
 let candidate=null;
@@ -18,10 +19,10 @@ function save(){localStorage.setItem(storageKey,JSON.stringify(state));}
 function show(id){["admin","main","summonView","resultView","warehouseView"].forEach(name=>$(name).classList.toggle("hidden",name!==id));}
 function hash(text){let value=2166136261;for(const char of text){value^=char.charCodeAt(0);value=Math.imul(value,16777619);}return value>>>0;}
 function next(seed){return()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};}
-function image(monster){return `進化モンスター/モンスター${monster.imageNumber}/${monster.stage}.png`;}
+function image(monster){const fileNumber=monster.summonImage?1:monster.stage;return `進化モンスター/モンスター${monster.imageNumber}/${fileNumber}.png`;}
 function active(){return state.monsters.find(monster=>monster.id===state.activeId)||state.monsters[0]||null;}
 function monsterHtml(monster){return `<img class="monster-img" src="${image(monster)}" alt="${monster.name}"><h2 class="name">${monster.name}</h2><div class="chips"><span>第${monster.stage}段階</span><span>画像No.${monster.imageNumber}</span></div><div class="mood">今の気持ち：${monster.feeling}</div><div class="stats">${monster.stats.map(item=>`<div class="stat">${item.name}：${item.value}<div class="bar"><div class="fill" style="width:${item.value}%"></div></div></div>`).join("")}</div>`;}
-function createMonster(speech){const seed=hash(`${touchData.x.toFixed(4)}|${touchData.y.toFixed(4)}|${touchData.pressure.toFixed(4)}|${speech}`);const random=next(seed);const sample=list=>list[Math.floor(random()*list.length)];return{id:crypto.randomUUID(),imageNumber:1+Math.floor(random()*65),name:sample(GAME_DATA.names),stage:1,feeling:sample(GAME_DATA.feelings),stats:GAME_DATA.stats.slice().sort(()=>random()-.5).slice(0,4).map(name=>({name,value:1+Math.floor(random()*100)})),summonData:{x:touchData.x,y:touchData.y,pressure:touchData.pressure,speech}};}
+function createMonster(speech){const seed=hash(`${touchData.x.toFixed(4)}|${touchData.y.toFixed(4)}|${touchData.pressure.toFixed(4)}|${speech}`);const random=next(seed);const sample=list=>list[Math.floor(random()*list.length)];return{id:crypto.randomUUID(),imageNumber:sample(summonImageNumbers),summonImage:true,name:sample(GAME_DATA.names),stage:1,feeling:sample(GAME_DATA.feelings),stats:GAME_DATA.stats.slice().sort(()=>random()-.5).slice(0,4).map(name=>({name,value:1+Math.floor(random()*100)})),summonData:{x:touchData.x,y:touchData.y,pressure:touchData.pressure,speech}};}
 function renderMain(){show("main");$("collectionCount").textContent=`モンスター：${state.monsters.length} / ${cap}`;const monster=active();$("mainMonster").innerHTML=monster?monsterHtml(monster):'<p class="empty">まだモンスターがいません。<br>「召喚する」から仲間を呼ぼう。</p>';}
 function renderWarehouse(){show("warehouseView");$("warehouseCount").textContent=`表示したいモンスターを選んでください（${state.monsters.length} / ${cap} 匹）`;if(!state.monsters.length){$("warehouseGrid").innerHTML='<p class="empty">倉庫は空です。</p>';return;}$("warehouseGrid").innerHTML=state.monsters.map(monster=>`<article class="monster-card ${monster.id===state.activeId?"selected":""}"><button data-select="${monster.id}"><img src="${image(monster)}" alt="${monster.name}"><div>${monster.name}</div><small>${monster.id===state.activeId?"表示中":"第"+monster.stage+"段階"}</small></button></article>`).join("");document.querySelectorAll("[data-select]").forEach(button=>button.addEventListener("click",()=>{state.activeId=button.dataset.select;save();renderMain();}));}
 function stopWave(){if(waveFrame)cancelAnimationFrame(waveFrame);waveFrame=null;if(microphoneStream){microphoneStream.getTracks().forEach(track=>track.stop());microphoneStream=null;}analyser=null;}
