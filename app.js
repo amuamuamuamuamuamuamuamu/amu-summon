@@ -10,6 +10,8 @@ let audioContext=null;
 let analyser=null;
 let microphoneStream=null;
 let waveFrame=null;
+let micReady=false;
+let activePointerId=null;
 
 function load(){try{state=JSON.parse(localStorage.getItem(storageKey))||state;if(!Array.isArray(state.monsters))state={monsters:[],activeId:null};}catch{}}
 function save(){localStorage.setItem(storageKey,JSON.stringify(state));}
@@ -31,13 +33,25 @@ function renderResult(){show("resultView");$("resultMonster").innerHTML=monsterH
 function summonFromSpeech(speech){if(!touchData){$("sensorText").textContent="先に五芒星へ指をタッチしてください。";return;}candidate=createMonster(speech);stopWave();$("successPop").classList.remove("hidden");setTimeout(()=>{$("successPop").classList.add("hidden");renderResult();},900);}
 async function startRecognition(){if(!touchData){$("sensorText").textContent="先に五芒星へ指をタッチしてください。";return;}const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SpeechRecognition){$("sensorText").textContent="このブラウザでは音声認識に対応していません。ChromeまたはEdgeでお試しください。";return;}try{await startWave();}catch{$("sensorText").textContent="マイクの使用を許可してください。";return;}recognition=new SpeechRecognition();recognition.lang="ja-JP";recognition.interimResults=false;recognition.maxAlternatives=1;recognition.onstart=()=>{$("listenButton").classList.add("listening");$("listenButton").textContent="「召喚」を聞いています…";};recognition.onerror=()=>{stopWave();$("listenButton").classList.remove("listening");$("listenButton").textContent="音声認識を開始";$("sensorText").textContent="音声を聞き取れませんでした。もう一度お試しください。";};recognition.onresult=event=>{const speech=event.results[0][0].transcript;$("sensorText").textContent=`認識した言葉：「${speech}」`;if(speech.includes("召喚"))summonFromSpeech(speech);else {$("sensorText").textContent="「召喚」という言葉を言ってください。";stopWave();}};recognition.onend=()=>{$("listenButton").classList.remove("listening");if(!$("listenButton").textContent.includes("開始"))$("listenButton").textContent="音声認識を開始";};recognition.start();}
 function setupRooms(){$("roomList").innerHTML=Array.from({length:10},(_,index)=>{const number=index+1;return `<div class="room-row"><a class="room-link" href="?room=${number}">${number}　空いている</a><button class="copy-url" data-copy-room="${number}">URL</button></div>`;}).join("");document.querySelectorAll("[data-copy-room]").forEach(button=>button.addEventListener("click",async()=>{const url=`${location.origin}${location.pathname}?room=${button.dataset.copyRoom}`;try{await navigator.clipboard.writeText(url);button.textContent="コピー";setTimeout(()=>button.textContent="URL",900);}catch{prompt("このURLをコピーしてください",url);}}));}
+function stopRecognition(){if(recognition){recognition.onend=null;recognition.abort();recognition=null;}}
+function stopWave(){if(waveFrame)cancelAnimationFrame(waveFrame);waveFrame=null;if(microphoneStream){microphoneStream.getTracks().forEach(track=>track.stop());microphoneStream=null;}analyser=null;micReady=false;}
+function startWave(){if(!analyser)return;const canvas=$("waveform"),context=canvas.getContext("2d");const draw=()=>{if(!analyser)return;const rect=canvas.getBoundingClientRect(),ratio=devicePixelRatio||1;canvas.width=rect.width*ratio;canvas.height=rect.height*ratio;context.setTransform(ratio,0,0,ratio,0,0);const values=new Uint8Array(analyser.frequencyBinCount);analyser.getByteTimeDomainData(values);context.clearRect(0,0,rect.width,rect.height);context.beginPath();context.strokeStyle="#ffec83";context.lineWidth=3;context.shadowColor="#ffec83";context.shadowBlur=12;values.forEach((value,index)=>{const x=index/(values.length-1)*rect.width,y=(value/255)*rect.height;if(index)context.lineTo(x,y);else context.moveTo(x,y);});context.stroke();context.shadowBlur=0;waveFrame=requestAnimationFrame(draw);};draw();}
+async function prepareMicrophone(){try{if(!navigator.mediaDevices?.getUserMedia)throw new Error("unsupported");microphoneStream=await navigator.mediaDevices.getUserMedia({audio:true});audioContext=audioContext||new AudioContext();if(audioContext.state==="suspended")await audioContext.resume();const source=audioContext.createMediaStreamSource(microphoneStream);analyser=audioContext.createAnalyser();analyser.fftSize=256;source.connect(analyser);micReady=true;startWave();$("sensorText").textContent="マイクの準備完了。五芒星に指を置くと音声認識が始まります。";return true;}catch{$("sensorText").textContent="マイクを許可できなかったため、メイン画面へ戻ります。";setTimeout(renderMain,900);return false;}}
+function clearSummon(){stopRecognition();stopWave();touchData=null;candidate=null;activePointerId=null;$("touchDot").classList.add("hidden");$("summonStage").classList.remove("charging");}
+async function openSummon(){clearSummon();show("summonView");$("sensorText").textContent="マイクの許可を待っています…";await prepareMicrophone();}
+function updateTouch(event){const rect=$("summonStage").getBoundingClientRect(),x=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width)),y=Math.max(0,Math.min(1,(event.clientY-rect.top)/rect.height)),pressure=event.pressure||.5;touchData={x,y,pressure};const dot=$("touchDot");dot.style.left=`${x*100}%`;dot.style.top=`${y*100}%`;dot.classList.remove("hidden");$("sensorText").textContent="音声認識中… 指を置いたまま「召喚」と言ってください。";}
+function summonFromSpeech(speech){if(activePointerId===null||!touchData)return;candidate=createMonster(speech);stopRecognition();stopWave();$("summonStage").classList.remove("charging");$("successPop").classList.remove("hidden");setTimeout(()=>{$("successPop").classList.add("hidden");renderResult();},900);}
+function startRecognition(){if(!micReady||!touchData||recognition)return;const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SpeechRecognition){$("sensorText").textContent="音声認識に対応していないため、メイン画面へ戻ります。";setTimeout(renderMain,900);return;}recognition=new SpeechRecognition();recognition.lang="ja-JP";recognition.continuous=true;recognition.interimResults=false;recognition.onresult=event=>{const speech=event.results[event.results.length-1][0].transcript;if(speech.includes("召喚"))summonFromSpeech(speech);};recognition.onerror=()=>{$("sensorText").textContent="音声を聞き取れませんでした。指を置き直してください。";};recognition.onend=()=>{recognition=null;};recognition.start();}
+function beginTouch(event){activePointerId=event.pointerId;$("summonStage").setPointerCapture?.(event.pointerId);$("summonStage").classList.add("charging");updateTouch(event);startRecognition();}
+function endTouch(event){if(activePointerId!==event.pointerId)return;activePointerId=null;$("summonStage").classList.remove("charging");stopRecognition();if(micReady)$("sensorText").textContent="五芒星に指を置くと音声認識が始まります。";}
 setupRooms();load();
 $("openSummon").addEventListener("click",openSummon);
 $("openWarehouse").addEventListener("click",renderWarehouse);
-$("cancelSummon").addEventListener("click",renderMain);
-$("listenButton").addEventListener("click",startRecognition);
-$("summonStage").addEventListener("pointerdown",updateTouch);
-$("summonStage").addEventListener("pointermove",event=>{if(event.buttons||event.pointerType==="touch")updateTouch(event);});
+$("cancelSummon").addEventListener("click",()=>{clearSummon();renderMain();});
+$("summonStage").addEventListener("pointerdown",beginTouch);
+$("summonStage").addEventListener("pointermove",event=>{if(event.pointerId===activePointerId)updateTouch(event);});
+$("summonStage").addEventListener("pointerup",endTouch);
+$("summonStage").addEventListener("pointercancel",endTouch);
 $("summonStage").addEventListener("contextmenu",event=>event.preventDefault());
 $("summonStage").addEventListener("touchstart",event=>event.preventDefault(),{passive:false});
 document.querySelectorAll("[data-back-main]").forEach(button=>button.addEventListener("click",renderMain));
